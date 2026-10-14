@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import './style.css';
 import { player } from './components/Player.js';
+import { camera } from "./components/Camera.js";
+import {renderer} from './components/Renderer.js';
 
 // Scene
 const scene = new THREE.Scene();
@@ -23,3 +25,8 @@ scene.add(player);
 
 // Camera
 // components/Camera.js
+scene.add(camera);
+
+// Renderer
+// components/Renderer.js
+scene.add(renderer);
