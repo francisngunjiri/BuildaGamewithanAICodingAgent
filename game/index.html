@@ -7,6 +7,32 @@
     <title>Game</title>
   </head>
   <body>
+    <div id="menu-screen" class="overlay-screen">
+      <div class="title-card">
+        <span class="eyebrow">Tode</span>
+        <h1>Infinite Drift</h1>
+        <button class="primary-button" data-action="play">Start Run</button>
+      </div>
+    </div>
+
+    <div id="difficulty-screen" class="overlay-screen hidden">
+      <div class="difficulty-panel">
+        <h2>Select difficulty</h2>
+        <div class="difficulty-grid">
+          <button class="difficulty-button" data-difficulty="EASY">Easy</button>
+          <button class="difficulty-button selected" data-difficulty="MEDIUM">Medium</button>
+          <button class="difficulty-button" data-difficulty="HARD">Hard</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pause-overlay" class="overlay-screen hidden">
+      <div class="title-card small">
+        <h2>Paused</h2>
+        <button class="primary-button" data-action="resume">Resume</button>
+      </div>
+    </div>
+
     <div id="game-hud">
       <div class="hud-topbar">
         <div class="score-card">
@@ -39,9 +65,26 @@
             <span>Stamina</span>
             <span class="stamina-value">100%</span>
           </div>
-          <div class="stamina-ring" style="--stamina-angle: 360deg;">
-            <div class="stamina-text">100%</div>
+          <div class="stamina-bar-shell">
+            <div class="stamina-bar-fill"></div>
           </div>
+        </div>
+      </div>
+
+      <div id="minimap-wrap">
+        <canvas id="minimap-canvas" width="160" height="160"></canvas>
+      </div>
+      <button id="camera-toggle" class="camera-toggle" type="button" aria-label="Switch camera view">CAMERA</button>
+      <button id="pause-button" class="pause-button" type="button" data-action="pause" aria-label="Pause game" hidden>PAUSE</button>
+
+      <div id="touch-controls" hidden>
+        <div id="look-zone" aria-label="Touch and drag to look around"></div>
+        <div class="virtual-joystick">
+          <div class="joystick-stick"></div>
+        </div>
+        <div class="action-buttons">
+          <button class="action-button dash" data-action="dash">DASH</button>
+          <button class="action-button pound" data-action="pound">POUND</button>
         </div>
       </div>
 

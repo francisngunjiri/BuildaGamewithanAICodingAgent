@@ -149,22 +149,20 @@ export class JuiceManager {
 
     _updateShake(deltaTime) {
         if (!this.camera) return;
+        if (!this.shakeState.active) return;
 
-        if (this.shakeState.active) {
-            this.shakeState.elapsed += deltaTime;
-            const t = Math.min(this.shakeState.elapsed / this.shakeState.duration, 1);
-            const decay = 1 - t;
-            const x = (Math.random() - 0.5) * this.shakeState.intensity * 2 * decay;
-            const y = (Math.random() - 0.5) * this.shakeState.intensity * 2 * decay;
-            const z = (Math.random() - 0.5) * this.shakeState.intensity * 0.75 * decay;
-            this.shakeState.offset.set(x, y, z);
-            this.camera.position.copy(this.baseCameraPosition).add(this.shakeState.offset);
+        this.baseCameraPosition.copy(this.camera.position);
+        this.shakeState.elapsed += deltaTime;
+        const t = Math.min(this.shakeState.elapsed / this.shakeState.duration, 1);
+        const decay = 1 - t;
+        const x = (Math.random() - 0.5) * this.shakeState.intensity * 2 * decay;
+        const y = (Math.random() - 0.5) * this.shakeState.intensity * 2 * decay;
+        const z = (Math.random() - 0.5) * this.shakeState.intensity * 0.75 * decay;
+        this.shakeState.offset.set(x, y, z);
+        this.camera.position.copy(this.baseCameraPosition).add(this.shakeState.offset);
 
-            if (t >= 1) {
-                this.shakeState.active = false;
-                this.camera.position.copy(this.baseCameraPosition);
-            }
-        } else {
+        if (t >= 1) {
+            this.shakeState.active = false;
             this.camera.position.copy(this.baseCameraPosition);
         }
     }

@@ -8,6 +8,65 @@ export const HOUSE_COLLISION_RADIUS = 30.0; // Keeps players and bugs outside th
 
 // Master tracking array for obstacle locations
 export const activeHouses = [];
+export const activeObstacles = [];
+
+export function registerObstacle(position, radius, height, jumpable = false) {
+    const obstacle = {
+        position: new THREE.Vector3(position.x, position.y ?? 0, position.z),
+        radius,
+        height,
+        jumpable
+    };
+    activeObstacles.push(obstacle);
+    return obstacle;
+}
+
+function isPathClear(start, displacement, radius, jumpHeight) {
+    const endX = start.x + displacement.x;
+    const endZ = start.z + displacement.z;
+    const lengthSq = displacement.x * displacement.x + displacement.z * displacement.z;
+
+    return activeObstacles.every((obstacle) => {
+        if (obstacle.jumpable && jumpHeight >= obstacle.height) return true;
+
+        const offsetX = obstacle.position.x - start.x;
+        const offsetZ = obstacle.position.z - start.z;
+        const projection = lengthSq === 0
+            ? 0
+            : THREE.MathUtils.clamp((offsetX * displacement.x + offsetZ * displacement.z) / lengthSq, 0, 1);
+        const closestX = start.x + displacement.x * projection;
+        const closestZ = start.z + displacement.z * projection;
+        const minDistance = obstacle.radius + radius;
+        return Math.hypot(closestX - obstacle.position.x, closestZ - obstacle.position.z) >= minDistance;
+    });
+}
+
+export function resolveObstacleMovement(start, displacement, {
+    radius = 1.5,
+    jumpHeight = 0
+} = {}) {
+    if (isPathClear(start, displacement, radius, jumpHeight)) return displacement.clone();
+
+    const magnitude = Math.hypot(displacement.x, displacement.z);
+    if (magnitude === 0) return new THREE.Vector3();
+
+    const directionX = displacement.x / magnitude;
+    const directionZ = displacement.z / magnitude;
+    const steeringAngles = [Math.PI / 4, -Math.PI / 4, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2];
+
+    for (const angle of steeringAngles) {
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        const candidate = new THREE.Vector3(
+            (directionX * cosine - directionZ * sine) * magnitude,
+            0,
+            (directionX * sine + directionZ * cosine) * magnitude
+        );
+        if (isPathClear(start, candidate, radius, jumpHeight)) return candidate;
+    }
+
+    return new THREE.Vector3();
+}
 
 const loader = new GLTFLoader();
 
@@ -56,14 +115,11 @@ export function spawnHouses() {
  * Universal look-ahead check function to validate if an entity hits an obstacle wall
  */
 export function checkObstacleCollision(targetPosition) {
-    for (let housePos of activeHouses) {
-        const dx = targetPosition.x - housePos.x;
-        const dy = targetPosition.y - housePos.y;
-        const currentDistance = Math.sqrt(dx * dx + dy * dy);
-
-        if (currentDistance < HOUSE_COLLISION_RADIUS) {
-            return true; // Collision detected! Movement blocked
-        }
-    }
-    return false;
+    return activeObstacles.some((obstacle) => {
+        if (obstacle.jumpable) return false;
+        return Math.hypot(
+            targetPosition.x - obstacle.position.x,
+            targetPosition.z - obstacle.position.z
+        ) < obstacle.radius + 1.5;
+    });
 }

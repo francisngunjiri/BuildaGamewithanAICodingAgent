@@ -8,8 +8,7 @@ export class HUDManager {
         this.comboValue = document.querySelector('.combo-value');
         this.healthFill = document.querySelector('.health-bar-fill');
         this.healthText = document.querySelector('.health-value');
-        this.staminaRing = document.querySelector('.stamina-ring');
-        this.staminaText = document.querySelector('.stamina-text');
+        this.staminaFill = document.querySelector('.stamina-bar-fill');
         this.staminaTextValue = document.querySelector('.stamina-value');
         this.highScoreBanner = document.querySelector('.high-score-banner');
 
@@ -60,15 +59,8 @@ export class HUDManager {
 
     updateStamina(percent) {
         const clamped = Math.max(0, Math.min(1, percent));
-        const angle = clamped * 360;
-
-        if (this.staminaRing) {
-            this.staminaRing.style.setProperty('--stamina-angle', `${angle}deg`);
-            this.staminaRing.style.background = `conic-gradient(#63e6be 0deg, #63e6be ${angle}deg, rgba(255,255,255,0.1) ${angle}deg)`;
-        }
-
+        if (this.staminaFill) this.staminaFill.style.width = `${clamped * 100}%`;
         const textValue = Math.round(clamped * 100);
-        if (this.staminaText) this.staminaText.textContent = `${textValue}%`;
         if (this.staminaTextValue) this.staminaTextValue.textContent = `${textValue}%`;
     }
 

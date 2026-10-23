@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 
-// Create a perspective camera with 30 degrees FOV and far plane set to 9000
-const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 9000);
+// Create a perspective camera with a sane default viewing angle for the 3D scene.
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 9000);
 
-// Set the initial camera to 300,-300,300 and set camera.up to 0,0,1
-camera.position.set(500, -500, 500);
-camera.up.set(0,0,1);
+// Keep the camera on the standard Y-up world axis; the game logic later drives the
+// follow camera behind the player, but this default position keeps the scene visible.
+camera.position.set(0, 8, 14);
+camera.up.set(0, 1, 0);
 
-// Point the camera at the origin
-camera.lookAt(0,0,0);
+// Point the camera at the origin.
+camera.lookAt(0, 1.5, 0);
 
 const cameraImpulse = {
     active: false,

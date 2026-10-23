@@ -1,2 +1,7 @@
-This directory will contain `Three.js` components used by the game, such as player, enemies, camera, renderer, map, and obstacles.
-Each component will be responsible for creating and configuring a single part of the scene and can be imported into `main.js`.
+# Tode Infinite Glitch
+
+The game has a start button to launch the game.
+The character tode has a health bar that diminishes when hit by the bugs/enemies and a stamina bar that replenishes after attacks on recovery.
+The game has three modes, easy, medium and difficult modes.
+
+there's a minimap to track the enemies.

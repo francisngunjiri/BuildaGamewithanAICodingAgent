@@ -3,26 +3,65 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { activeEnemies, COLLISION_DISTANCE } from './Enemy.js';
 import { awardKillPoints } from './Score.js';
 import { isGameOver, resetGame } from './GameState.js';
-import { checkObstacleCollision } from './House.js';
+import { checkObstacleCollision, resolveObstacleMovement } from './House.js';
 import { triggerCameraImpulse } from './Camera.js';
 import { hudManager } from './HUDManager.js';
 import { juiceManager } from './JuiceManager.js';
 
 const player = new THREE.Group();
 player.position.set(0, 0, 0);
+player.userData = { facingAngle: 0, isDashing: false };
+
+const fallbackBody = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.85, 2.2, 6, 12),
+    new THREE.MeshStandardMaterial({
+        color: 0x73f0d1,
+        emissive: 0x0f7866,
+        emissiveIntensity: 0.7,
+        roughness: 0.5,
+        metalness: 0.2,
+        flatShading: true
+    })
+);
+fallbackBody.position.y = 1.7;
+player.add(fallbackBody);
+
+const fallbackHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 18, 18),
+    new THREE.MeshStandardMaterial({
+        color: 0xf3d597,
+        emissive: 0x2a1d0f,
+        emissiveIntensity: 0.25,
+        roughness: 0.6,
+        metalness: 0.1
+    })
+);
+fallbackHead.position.y = 3.3;
+player.add(fallbackHead);
+
+const fallbackAura = new THREE.Mesh(
+    new THREE.TorusGeometry(1.6, 0.08, 6, 24),
+    new THREE.MeshBasicMaterial({ color: 0x67f7d0, transparent: true, opacity: 0.85 })
+);
+fallbackAura.rotation.x = Math.PI / 2;
+fallbackAura.position.y = 0.12;
+player.add(fallbackAura);
 
 // --- Base Configurations ---
 const BASE_MOVE_SPEED = 4.0;
-const JUMP_HEIGHT = 15;
-const JUMP_DISTANCE = 20;
+const JUMP_HEIGHT = 4.5;
 const BASE_ATTACK_RADIUS = 40.0;
 const BASE_ATTACK_COOLDOWN = 1.0;
 const MAX_HEALTH = 100;
 const MAX_STAMINA = 100;
+const ENEMY_HIT_DAMAGE = 20;
+const ENEMY_HIT_STAMINA_COST = 15;
+const HIT_INVULNERABILITY_DURATION = 1.25;
 const DASH_COST = 50;
 const DASH_DURATION = 0.15;
-const DASH_DISTANCE = JUMP_DISTANCE * 2;
+const DASH_DISTANCE = 40;
 const STAMINA_REGEN_RATE = 25;
+let staminaRegenRate = STAMINA_REGEN_RATE;
 const STAMINA_REGEN_DELAY = 1.5;
 
 // --- Live Dynamic Scaling Parameters ---
@@ -37,6 +76,7 @@ export let isDashing = false;
 export let isInvulnerable = false;
 let lastDashTime = 0;
 let staminaRegenCooldown = 0;
+let hitInvulnerabilityTimer = 0;
 let dashTimer = 0;
 let dashDirection = new THREE.Vector3();
 let dashStartPosition = new THREE.Vector3();
@@ -44,11 +84,9 @@ let ghostTrailTimer = 0;
 let ghostTrailMeshes = [];
 
 // --- State Variables ---
-const inputQueue = [];
-let currentMove = null;
-let moveProgress = 0;
+let jumpPhase = 0;
 let loadedModel = null;
-let modelBaseZ = 0;
+let modelBaseY = 0;
 let attackCooldownTimer = 0;
 let attackVisualMesh = null;
 let attackVisualTimer = 0;
@@ -57,13 +95,16 @@ const loader = new GLTFLoader();
 loader.load('/models/tode.glb', (gltf) => {
     const model = gltf.scene;
     loadedModel = model;
-    model.rotation.x = Math.PI / 2;
-    model.scale.setScalar(20);
     const box = new THREE.Box3().setFromObject(model);
     const size = new THREE.Vector3();
     box.getSize(size);
-    modelBaseZ = size.z / 2;
-    model.position.z = modelBaseZ;
+    model.scale.setScalar(4.2 / Math.max(size.y, 0.001));
+    const scaledBox = new THREE.Box3().setFromObject(model);
+    modelBaseY = -scaledBox.min.y;
+    model.position.y = modelBaseY;
+    fallbackBody.visible = false;
+    fallbackHead.visible = false;
+    fallbackAura.visible = false;
     player.add(model);
 });
 
@@ -71,7 +112,8 @@ loader.load('/models/tode.glb', (gltf) => {
 const circleGeo = new THREE.CircleGeometry(1, 32);
 const circleMat = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
 attackVisualMesh = new THREE.Mesh(circleGeo, circleMat);
-attackVisualMesh.position.z = 0.25;
+attackVisualMesh.rotation.x = -Math.PI / 2;
+attackVisualMesh.position.y = 0.25;
 attackVisualMesh.visible = false;
 player.add(attackVisualMesh);
 
@@ -108,15 +150,15 @@ function createGhostTrail() {
     ghostTrailMeshes.push({ mesh: ghost, life: 0.3, maxLife: 0.3 });
 }
 
-function triggerDash() {
+export function triggerDash() {
     if (currentStamina < DASH_COST || isDashing || isGameOver) return;
 
     const facingDirection = getFacingDirection();
     if (!facingDirection) return;
 
     const dashVector = facingDirection.clone().multiplyScalar(DASH_DISTANCE);
-    const targetPosition = player.position.clone().add(dashVector);
-    const clampedPosition = clampToBoard(targetPosition);
+    const obstacleSafeDash = resolveObstacleMovement(player.position, dashVector, { radius: 1.8 });
+    const clampedPosition = clampToBoard(player.position.clone().add(obstacleSafeDash));
 
     if (clampedPosition.distanceTo(player.position) <= 0.001) return;
 
@@ -124,6 +166,7 @@ function triggerDash() {
     lastDashTime = performance.now() / 1000;
     staminaRegenCooldown = STAMINA_REGEN_DELAY;
     isDashing = true;
+    player.userData.isDashing = true;
     isInvulnerable = true;
     dashTimer = DASH_DURATION;
     dashDirection.copy(clampedPosition.sub(player.position));
@@ -140,55 +183,55 @@ function triggerDash() {
     createGhostTrail();
 }
 
-function getFacingDirection() {
-    if (!loadedModel) {
-        return new THREE.Vector3(1, 0, 0);
-    }
+export function setStaminaRegenRate(rate) {
+    staminaRegenRate = rate;
+}
 
-    const directionVector = new THREE.Vector3(Math.cos(loadedModel.rotation.y), Math.sin(loadedModel.rotation.y), 0);
-    if (directionVector.lengthSq() === 0) {
-        return new THREE.Vector3(1, 0, 0);
-    }
-    return directionVector.normalize();
+export function takeEnemyHit() {
+    if (isGameOver || isInvulnerable || hitInvulnerabilityTimer > 0) return false;
+
+    currentHealth = Math.max(0, currentHealth - ENEMY_HIT_DAMAGE);
+    currentStamina = Math.max(0, currentStamina - ENEMY_HIT_STAMINA_COST);
+    staminaRegenCooldown = STAMINA_REGEN_DELAY;
+    hitInvulnerabilityTimer = HIT_INVULNERABILITY_DURATION;
+    hudManager.updateHealth(currentHealth / MAX_HEALTH);
+    hudManager.updateStamina(currentStamina / MAX_STAMINA);
+
+    return currentHealth === 0;
+}
+
+export function resetPlayerVitals() {
+    currentHealth = MAX_HEALTH;
+    currentStamina = MAX_STAMINA;
+    staminaRegenCooldown = 0;
+    hitInvulnerabilityTimer = 0;
+    isDashing = false;
+    isInvulnerable = false;
+    player.userData.isDashing = false;
+    hudManager.updateHealth(1);
+    hudManager.updateStamina(1);
+}
+
+function getFacingDirection() {
+    const angle = player.userData.facingAngle ?? 0;
+    return new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
 }
 
 function clampToBoard(targetPosition) {
     const boardHalf = 260;
     const clamped = targetPosition.clone();
     clamped.x = THREE.MathUtils.clamp(clamped.x, -boardHalf, boardHalf);
-    clamped.y = THREE.MathUtils.clamp(clamped.y, -boardHalf, boardHalf);
+    clamped.z = THREE.MathUtils.clamp(clamped.z, -boardHalf, boardHalf);
     return clamped;
 }
 
 window.addEventListener('keydown', (event) => {
     if ((event.key === ' ' || event.key === 'Spacebar') && isGameOver) {
         if (player.parent) resetGame(player.parent);
-        return;
     }
-    if (isGameOver) return;
-
-    if (event.key === 'Shift') {
-        triggerDash();
-        return;
-    }
-
-    if (event.key === ' ' || event.key === 'Spacebar') {
-        executeAttack();
-        return;
-    }
-
-    let direction = null;
-    let angle = 0;
-    switch (event.key) {
-        case 'ArrowUp': direction = new THREE.Vector3(0, JUMP_DISTANCE, 0); angle = 0; break;
-        case 'ArrowDown': direction = new THREE.Vector3(0, -JUMP_DISTANCE, 0); angle = Math.PI; break;
-        case 'ArrowLeft': direction = new THREE.Vector3(-JUMP_DISTANCE, 0, 0); angle = Math.PI / 2; break;
-        case 'ArrowRight': direction = new THREE.Vector3(JUMP_DISTANCE, 0, 0); angle = -Math.PI / 2; break;
-    }
-    if (direction) inputQueue.push({ direction, angle });
 });
 
-function executeAttack() {
+export function executeAttack() {
     if (attackCooldownTimer > 0 || isGameOver) return;
 
     attackCooldownTimer = liveAttackCooldown;
@@ -199,8 +242,8 @@ function executeAttack() {
     for (let i = activeEnemies.length - 1; i >= 0; i--) {
         const enemy = activeEnemies[i];
         const dx = player.position.x - enemy.mesh.position.x;
-        const dy = player.position.y - enemy.mesh.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dz = player.position.z - enemy.mesh.position.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
 
         if (distance <= liveAttackRadius) {
             enemy.scene.remove(enemy.mesh);
@@ -217,7 +260,7 @@ export function updatePlayerDynamicDifficulty(difficultyFactor) {
 }
 
 function checkPlayerCollision(targetPosition) {
-    if (isInvulnerable) {
+    if (isInvulnerable || hitInvulnerabilityTimer > 0) {
         return false;
     }
 
@@ -226,19 +269,26 @@ function checkPlayerCollision(targetPosition) {
     }
 
     for (let enemy of activeEnemies) {
-        const dx = targetPosition.x - enemy.mesh.position.x;
-        const dy = targetPosition.y - enemy.mesh.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < COLLISION_DISTANCE) {
+        const targetDistance = Math.hypot(
+            targetPosition.x - enemy.mesh.position.x,
+            targetPosition.z - enemy.mesh.position.z
+        );
+        const currentDistance = Math.hypot(
+            player.position.x - enemy.mesh.position.x,
+            player.position.z - enemy.mesh.position.z
+        );
+        if (targetDistance < COLLISION_DISTANCE && targetDistance < currentDistance) {
             return true;
         }
     }
     return false;
 }
 
-export function updatePlayer(deltaTime) {
+export function updatePlayer(deltaTime, moveDirection = new THREE.Vector3(), attackPressed = false) {
     if (isGameOver) return;
 
+    hitInvulnerabilityTimer = Math.max(0, hitInvulnerabilityTimer - deltaTime);
+    if (attackPressed) executeAttack();
     if (attackCooldownTimer > 0) attackCooldownTimer -= deltaTime;
     if (attackVisualMesh.visible) {
         attackVisualTimer -= deltaTime;
@@ -273,6 +323,7 @@ export function updatePlayer(deltaTime) {
 
         if (dashTimer <= 0) {
             isDashing = false;
+            player.userData.isDashing = false;
             isInvulnerable = false;
             player.position.copy(dashStartPosition.clone().add(dashDirection));
             ghostTrailTimer = 0;
@@ -283,38 +334,48 @@ export function updatePlayer(deltaTime) {
     if (!isDashing && currentStamina < MAX_STAMINA) {
         staminaRegenCooldown -= deltaTime;
         if (staminaRegenCooldown <= 0) {
-            currentStamina = Math.min(MAX_STAMINA, currentStamina + STAMINA_REGEN_RATE * deltaTime);
+            currentStamina = Math.min(MAX_STAMINA, currentStamina + staminaRegenRate * deltaTime);
         }
     }
 
     hudManager.updateStamina(currentStamina / MAX_STAMINA);
     hudManager.updateHealth(currentHealth / MAX_HEALTH);
 
-    if (!currentMove && inputQueue.length > 0) {
-        const nextMove = inputQueue.shift();
-        const targetLandingPos = player.position.clone().add(nextMove.direction);
-        if (!checkPlayerCollision(targetLandingPos)) {
-            currentMove = nextMove;
-            moveProgress = 0;
-            if (loadedModel) loadedModel.rotation.y = currentMove.angle;
+    const direction = moveDirection.clone();
+    direction.y = 0;
+    if (!isDashing && direction.lengthSq() > 1e-5) {
+        direction.normalize();
+        const targetAngle = Math.atan2(direction.x, direction.z);
+        player.userData.facingAngle = targetAngle;
+        if (loadedModel) {
+            const targetRotation = new THREE.Quaternion().setFromAxisAngle(
+                new THREE.Vector3(0, 1, 0),
+                targetAngle
+            );
+            loadedModel.quaternion.slerp(targetRotation, Math.min(1, 12 * deltaTime));
         }
-    }
 
-    if (currentMove) {
-        moveProgress += liveMoveSpeed * deltaTime;
-        if (moveProgress >= 1) {
-            player.position.add(currentMove.direction);
-            if (loadedModel) loadedModel.position.z = modelBaseZ;
-            currentMove = null;
-            moveProgress = 0;
+        jumpPhase += deltaTime * 5.5;
+        const jumpHeight = Math.max(0, Math.sin(jumpPhase)) * JUMP_HEIGHT;
+        const displacement = direction.multiplyScalar(liveMoveSpeed * deltaTime);
+        const safeDisplacement = resolveObstacleMovement(player.position, displacement, {
+            radius: 1.8,
+            jumpHeight
+        });
+        const nextPosition = player.position.clone().add(safeDisplacement);
+        if (!checkPlayerCollision(nextPosition)) player.position.copy(nextPosition);
+
+        if (loadedModel) {
+            loadedModel.position.y = modelBaseY + jumpHeight;
         } else {
-            const currentStep = currentMove.direction.clone().multiplyScalar(liveMoveSpeed * deltaTime);
-            player.position.add(currentStep);
-            if (loadedModel) {
-                const hopArcHeight = Math.sin(moveProgress * Math.PI) * JUMP_HEIGHT;
-                loadedModel.position.z = modelBaseZ + hopArcHeight;
-            }
+            fallbackBody.position.y = 1.7 + jumpHeight;
+            fallbackHead.position.y = 3.3 + jumpHeight;
         }
+    } else {
+        jumpPhase = 0;
+        if (loadedModel) loadedModel.position.y = modelBaseY;
+        fallbackBody.position.y = 1.7;
+        fallbackHead.position.y = 3.3;
     }
 }
 
