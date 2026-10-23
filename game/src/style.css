@@ -2,3 +2,42 @@ body {
   margin: 0;
   overflow: hidden;
 }
+.score {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', Courier, monospace; /* Classic arcade look */
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 8px 16px;
+  border-radius: 4px;
+  user-select: none;
+  pointer-events: none; /* Prevents blocking clicks */
+  z-index: 100;
+}
+.game-over {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 48px;
+  font-weight: bold;
+  color: #ff3333;
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 30px 60px;
+  border-radius: 8px;
+  border: 4px solid #ff3333;
+  user-select: none;
+  z-index: 200;
+}
+.game-over span {
+  font-size: 20px;
+  color: #ffffff;
+  display: block;
+  margin-top: 15px;
+}
