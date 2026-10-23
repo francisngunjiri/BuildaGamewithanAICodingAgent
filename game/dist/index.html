@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/tode.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Game</title>
+    <script type="module" crossorigin src="/assets/index-BaWc9w5a.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-3SfwvW4-.css">
+  </head>
+  <body>
+    <div id="game-hud">
+      <div class="hud-topbar">
+        <div class="score-card">
+          <div class="score-label">Score</div>
+          <div class="score-value">00000</div>
+        </div>
+        <div class="combo-card">
+          <div class="combo-label">Combo</div>
+          <div class="combo-value">1.0x</div>
+        </div>
+        <div class="best-card">
+          <div class="best-label">Best</div>
+          <div class="best-value">00000</div>
+        </div>
+      </div>
+
+      <div class="hud-left">
+        <div class="stat-panel">
+          <div class="stat-header">
+            <span>Health</span>
+            <span class="health-value">100%</span>
+          </div>
+          <div class="health-bar-shell">
+            <div class="health-bar-fill"></div>
+          </div>
+        </div>
+
+        <div class="stat-panel">
+          <div class="stat-header">
+            <span>Stamina</span>
+            <span class="stamina-value">100%</span>
+          </div>
+          <div class="stamina-ring" style="--stamina-angle: 360deg;">
+            <div class="stamina-text">100%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="high-score-banner">New High Score!</div>
+    </div>
+
+    <div class="game-over" style="display: none;">GAME OVER<br><span>Press SPACE to Restart</span></div>
+    <canvas class="game"></canvas>
+  </body>
+</html>
